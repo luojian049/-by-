@@ -158,8 +158,8 @@
 </div>
 
 <script>
-    // ========== 你的 GitHub 数据文件（加时间戳防缓存）==========
-    const DATA_URL = `https://raw.githubusercontent.com/luojian049/-by-/main/梁场备份.json?t=${Date.now()}`;
+    // ================= 数据源（jsDelivr CDN，国内加速）=================
+    const DATA_URL = `https://cdn.jsdelivr.net/gh/luojian049/-by-/梁场备份.json?t=${Date.now()}`;
 
     const STORAGE_KEY = 'beamFieldData';
     let beams = {};
@@ -167,6 +167,7 @@
     let logs = [];
     let logCounter = 1;
 
+    // ---------- 本地存储 ----------
     function saveToLocal() {
         localStorage.setItem(STORAGE_KEY, JSON.stringify({ beams, pedestals, logs, logCounter }));
     }
@@ -183,7 +184,7 @@
         } catch (e) { return false; }
     }
 
-    // ---------- 从云端加载（优先）----------
+    // ---------- 从云端加载 ----------
     async function loadFromCloud() {
         const statusEl = document.getElementById('syncStatus');
         try {
@@ -195,9 +196,9 @@
                 pedestals = data.pedestals;
                 logs = data.logs;
                 logCounter = data.logCounter || 1;
-                statusEl.textContent = '✅ 数据来源：云端（GitHub）';
+                statusEl.textContent = '✅ 数据来源：云端（CDN加速）';
                 statusEl.className = 'sync-status sync-cloud';
-                saveToLocal();
+                saveToLocal(); // 同步到本地
                 return true;
             } else {
                 throw new Error('JSON 格式不完整');
@@ -210,11 +211,11 @@
 
     async function loadAllData() {
         const statusEl = document.getElementById('syncStatus');
-        // 1. 先尝试加载云端
+        // 1. 优先云端
         const cloudOK = await loadFromCloud();
         if (cloudOK) return;
 
-        // 2. 云端失败，尝试加载本地
+        // 2. 云端失败，尝试本地
         const localOK = loadFromLocal();
         if (localOK) {
             statusEl.textContent = '⚠️ 数据来源：本地存储（云端连接失败）';
@@ -225,7 +226,7 @@
         // 3. 都失败，初始化空数据
         initPedestalsStructure();
         saveToLocal();
-        statusEl.textContent = '❌ 未找到数据文件，请上传 JSON 或导入备份';
+        statusEl.textContent = '❌ 未找到数据文件，请上传JSON或导入备份';
         statusEl.className = 'sync-status sync-error';
     }
 
@@ -252,7 +253,7 @@
         renderAll();
     }
 
-    // ---------- 日志 ----------
+    // ---------- 日志操作 ----------
     function addLog(beamId, from, to, actionType) {
         const now = new Date();
         const timeStr = now.getFullYear()+'.'+(now.getMonth()+1)+'.'+now.getDate()+' '+
@@ -322,7 +323,7 @@
             </li>`).join('');
     }
 
-    // ---------- 渲染 ----------
+    // ---------- 渲染界面 ----------
     function renderAll() {
         let html = '';
         for (let i=1; i<=2; i++) {
@@ -366,6 +367,7 @@
         saveToLocal();
     }
 
+    // ---------- 台座操作弹窗 ----------
     function openActionModal(pedestalId) {
         const p = pedestals[pedestalId];
         const overlay = document.getElementById('modalOverlay');
@@ -459,6 +461,7 @@
     document.getElementById('modalOverlay').addEventListener('click', function(e) { if (e.target===this) closeModal(); });
     document.addEventListener('keydown', function(e) { if (e.key==='Escape') closeModal(); });
 
+    // ---------- 更新位置 ----------
     function populateUpdateTargets() {
         const sel = document.getElementById('updateTarget');
         sel.innerHTML = '<option value="">-- 选择台座 --</option>';
@@ -506,6 +509,7 @@
     }
     document.getElementById('updatePositionOverlay').addEventListener('click', function(e) { if (e.target===this) closeUpdateModal(); });
 
+    // ---------- 新梁入场 ----------
     function newBeamEntry() {
         const beamId = prompt('请输入新梁编号（如 A1）：'); if (!beamId) return;
         if (beams[beamId]) { alert('该编号已存在！'); return; }
@@ -518,6 +522,7 @@
         renderAll();
     }
 
+    // ---------- 导出 / 导入 ----------
     function exportData() {
         const data = { beams, pedestals, logs, logCounter };
         const blob = new Blob([JSON.stringify(data)], {type:'application/json'});
