@@ -78,7 +78,10 @@
         .log-time { color: #888; font-size: 11px; }
         .log-action { color: var(--accent); font-weight: bold; }
         .log-detail { color: #ccc; }
-        .sync-status { font-size: 12px; color: #888; text-align: center; margin-top: 10px; }
+        .sync-status { font-size: 13px; text-align: center; margin-top: 10px; padding: 6px; border-radius: 4px; }
+        .sync-cloud { color: #2ecc71; background: #1a2a1a; }
+        .sync-local { color: #f39c12; background: #2a1a1a; }
+        .sync-error { color: #e74c3c; background: #2a1a1a; }
 
         .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1000; justify-content: center; align-items: center; }
         .modal-overlay.active { display: flex; }
@@ -120,7 +123,7 @@
                 <button class="btn btn-info" onclick="exportData()">📥 导出</button>
                 <button class="btn btn-info" onclick="importDataPrompt()">📤 导入</button>
             </div>
-            <div class="sync-status" id="syncStatus">数据来源：本地存储</div>
+            <div class="sync-status" id="syncStatus">正在加载数据...</div>
         </div>
         <div class="log-area">
             <div class="log-title"><span>📋 操作记录</span><button class="btn btn-info" style="font-size:13px;padding:6px 12px;" onclick="openManualLogModal()">➕ 手动添加</button></div>
@@ -155,8 +158,8 @@
 </div>
 
 <script>
-    // ========== 你的 GitHub 数据文件地址 ==========
-    const DATA_URL = 'https://raw.githubusercontent.com/luojian049/-by-/main/梁场备份.json';
+    // ========== 你的 GitHub 数据文件（加时间戳防缓存）==========
+    const DATA_URL = `https://raw.githubusercontent.com/luojian049/-by-/main/梁场备份.json?t=${Date.now()}`;
 
     const STORAGE_KEY = 'beamFieldData';
     let beams = {};
@@ -164,7 +167,6 @@
     let logs = [];
     let logCounter = 1;
 
-    // ---------- 本地存储 ----------
     function saveToLocal() {
         localStorage.setItem(STORAGE_KEY, JSON.stringify({ beams, pedestals, logs, logCounter }));
     }
@@ -181,36 +183,50 @@
         } catch (e) { return false; }
     }
 
-    // ---------- 从 GitHub 加载云端数据 ----------
+    // ---------- 从云端加载（优先）----------
     async function loadFromCloud() {
+        const statusEl = document.getElementById('syncStatus');
         try {
-            const response = await fetch(DATA_URL, { cache: 'no-cache' });
-            if (!response.ok) throw new Error('HTTP ' + response.status);
+            const response = await fetch(DATA_URL, { cache: 'no-store' });
+            if (!response.ok) throw new Error('文件未找到 (HTTP ' + response.status + ')');
             const data = await response.json();
-            if (data.beams && data.pedestals && data.logs) {
+            if (data.beams && data.pedestals && data.logs !== undefined) {
                 beams = data.beams;
                 pedestals = data.pedestals;
                 logs = data.logs;
                 logCounter = data.logCounter || 1;
-                document.getElementById('syncStatus').textContent = '数据来源：云端（GitHub）';
-                saveToLocal(); // 同步到本地
+                statusEl.textContent = '✅ 数据来源：云端（GitHub）';
+                statusEl.className = 'sync-status sync-cloud';
+                saveToLocal();
                 return true;
+            } else {
+                throw new Error('JSON 格式不完整');
             }
         } catch (e) {
-            console.log('云端数据加载失败，使用本地数据:', e.message);
+            console.log('云端加载失败:', e.message);
         }
         return false;
     }
 
     async function loadAllData() {
-        const cloudLoaded = await loadFromCloud();
-        if (!cloudLoaded) {
-            if (!loadFromLocal()) {
-                initPedestalsStructure();
-                saveToLocal();
-            }
-            document.getElementById('syncStatus').textContent = '数据来源：本地存储';
+        const statusEl = document.getElementById('syncStatus');
+        // 1. 先尝试加载云端
+        const cloudOK = await loadFromCloud();
+        if (cloudOK) return;
+
+        // 2. 云端失败，尝试加载本地
+        const localOK = loadFromLocal();
+        if (localOK) {
+            statusEl.textContent = '⚠️ 数据来源：本地存储（云端连接失败）';
+            statusEl.className = 'sync-status sync-local';
+            return;
         }
+
+        // 3. 都失败，初始化空数据
+        initPedestalsStructure();
+        saveToLocal();
+        statusEl.textContent = '❌ 未找到数据文件，请上传 JSON 或导入备份';
+        statusEl.className = 'sync-status sync-error';
     }
 
     function initPedestalsStructure() {
@@ -350,7 +366,6 @@
         saveToLocal();
     }
 
-    // ---------- 弹窗逻辑 ----------
     function openActionModal(pedestalId) {
         const p = pedestals[pedestalId];
         const overlay = document.getElementById('modalOverlay');
