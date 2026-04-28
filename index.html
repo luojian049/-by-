@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>梁场动态管理系统</title>
+    <style>
+        :root { --bg: #1a1a2e; --panel: #16213e; --accent: #ffd700; --danger: #ff4444; --safe: #2a5a2a; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif; background: var(--bg); color: #e0e0e0; padding: 20px; }
+        .container { max-width: 1600px; margin: 0 auto; }
+        h1 { text-align: center; color: var(--accent); margin-bottom: 20px; }
+        .main-layout { display: flex; gap: 20px; flex-wrap: wrap; }
+        .panel-area { flex: 1 1 1000px; background: var(--panel); border-radius: 12px; padding: 20px; border: 1px solid #0f3460; }
+        .log-area { width: 380px; background: var(--panel); border-radius: 12px; padding: 20px; border: 1px solid #0f3460; max-height: 85vh; overflow-y: auto; display: flex; flex-direction: column; }
+        .section-title { font-size: 18px; font-weight: bold; color: var(--accent); margin-bottom: 15px; padding-bottom: 8px; border-bottom: 2px solid #0f3460; }
+        .zone { margin-bottom: 25px; }
+        .pedestal-grid { display: flex; flex-wrap: wrap; gap: 10px; }
+        .pedestal-item {
+            position: relative; background: #1a1a3e; border: 2px solid #0f3460; border-radius: 8px; padding: 14px 10px;
+            width: 150px; min-height: 80px; text-align: center; cursor: pointer; transition: all 0.2s;
+            display: flex; flex-direction: column; justify-content: center;
+        }
+        .pedestal-item:hover { border-color: var(--accent); transform: translateY(-2px); }
+        .pedestal-item.occupied { background: linear-gradient(135deg, #2d1a1a, #3a2020); border-color: var(--danger); }
+        .pedestal-item.occupied::after {
+            content: ''; position: absolute; top: -4px; right: -4px; width: 14px; height: 14px;
+            background: var(--danger); border-radius: 50%; border: 2px solid var(--bg);
+        }
+        .pedestal-item.empty { background: #1a2a1a; border-color: var(--safe); }
+        .pedestal-name { font-size: 13px; color: #a0a0a0; margin-bottom: 6px; }
+        .pedestal-beam { font-size: 17px; font-weight: bold; word-break: break-all; line-height: 1.3; }
+        .pedestal-item.empty .pedestal-beam { color: #4a7a4a; }
+        .pedestal-status { font-size: 12px; margin-top: 4px; }
+        .pedestal-item.empty .pedestal-status { color: #4a8a4a; }
+        .pedestal-item.occupied .pedestal-status { color: #ff8888; }
+
+        .storage-columns { display: flex; gap: 12px; }
+        .storage-column { display: flex; flex-direction: column; gap: 8px; width: 120px; flex-shrink: 0; }
+        .storage-column-title { text-align: center; font-weight: bold; color: var(--accent); font-size: 14px; background: #0f3460; padding: 6px; border-radius: 4px; }
+        .storage-cell-vertical { display: flex; flex-direction: column; gap: 4px; background: #111; border-radius: 6px; padding: 4px; border: 1px solid #0f3460; }
+        .storage-mini {
+            background: #1a1a3e; border: 1px solid #0f3460; border-radius: 4px; padding: 6px 4px;
+            text-align: center; cursor: pointer; font-size: 13px; height: 60px; width: 100%;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            word-break: break-all; line-height: 1.3;
+        }
+        .storage-mini:hover { border-color: var(--accent); }
+        .storage-mini.occupied { background: #2d1a1a; border-color: var(--danger); }
+        .storage-mini.empty { background: #1a2a1a; border-color: var(--safe); }
+        .slot-id { font-size: 11px; color: #888; margin-bottom: 2px; }
+        .slot-beam { font-weight: bold; font-size: 13px; }
+        .storage-mini.empty .slot-beam { color: #4a7a4a; }
+
+        .special-equipment { display: flex; gap: 15px; margin-top: 10px; }
+        .equipment-card {
+            background: #1a1a3e; border: 2px solid #ff8c00; border-radius: 8px; padding: 12px 16px;
+            min-width: 160px; cursor: pointer;
+        }
+        .equipment-card:hover { border-color: var(--accent); }
+        .eq-name { font-size: 14px; color: #ff8c00; font-weight: bold; }
+        .eq-location { font-size: 13px; color: #ccc; margin-top: 4px; }
+        .equipment-card.conflict { border-color: red; animation: pulse 1s infinite; }
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 0 5px rgba(255,0,0,0.3); }
+            50% { box-shadow: 0 0 20px rgba(255,0,0,0.7); }
+        }
+
+        .log-title { font-size: 16px; font-weight: bold; color: var(--accent); margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; }
+        .log-list { list-style: none; flex: 1; overflow-y: auto; }
+        .log-item {
+            padding: 10px 12px; margin-bottom: 8px; background: #1a1a3e; border-left: 3px solid var(--accent);
+            border-radius: 4px; font-size: 13px; line-height: 1.6; position: relative;
+        }
+        .log-actions { position: absolute; right: 8px; top: 6px; display: flex; gap: 6px; }
+        .log-actions button { background: #333; border: none; color: #aaa; cursor: pointer; padding: 2px 6px; border-radius: 4px; font-size: 11px; }
+        .log-actions button:hover { color: #fff; background: #555; }
+        .log-time { color: #888; font-size: 11px; }
+        .log-action { color: var(--accent); font-weight: bold; }
+        .log-detail { color: #ccc; }
+        .sync-status { font-size: 12px; color: #888; text-align: center; margin-top: 10px; }
+
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1000; justify-content: center; align-items: center; }
+        .modal-overlay.active { display: flex; }
+        .modal { background: var(--panel); border: 2px solid #0f3460; border-radius: 12px; padding: 25px; min-width: 400px; max-width: 500px; }
+        .modal h3 { color: var(--accent); margin-bottom: 15px; }
+        .btn {
+            padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: bold;
+            background: #333; color: #ccc;
+        }
+        .btn-confirm { background: var(--accent); color: var(--bg); }
+        .btn-cancel { background: #444; color: #ccc; }
+        .btn-danger { background: #c0392b; color: #fff; }
+        .btn-out { background: #e67e22; color: #fff; }
+        .btn-info { background: #2980b9; color: #fff; }
+        .btn-warning { background: #c0392b; color: #fff; }
+        .warning-text { color: #ff6b6b; font-size: 12px; margin-top: 5px; }
+        .edit-modal {
+            display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: var(--panel); border: 2px solid var(--accent); border-radius: 12px; padding: 20px;
+            z-index: 1100; min-width: 350px;
+        }
+        .edit-modal.active { display: block; }
+        .edit-modal input, .edit-modal select { width: 100%; padding: 8px; margin: 6px 0; background: #1a1a3e; border: 1px solid #0f3460; color: #fff; border-radius: 4px; }
+        .edit-modal label { color: #a0a0a0; display: block; margin-top: 8px; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>🏗️ 梁场动态管理系统</h1>
+    <div class="main-layout">
+        <div class="panel-area">
+            <div class="zone"><div class="section-title">绑扎区</div><div class="pedestal-grid" id="binderZone"></div></div>
+            <div class="zone"><div class="section-title">制梁区</div><div class="pedestal-grid" id="castZone"></div><div class="special-equipment" id="specialEquip"></div></div>
+            <div class="zone"><div class="section-title">存梁区（5排 × 7列 × 2层）</div><div id="storageZone"></div></div>
+            <div style="display:flex; gap:15px; justify-content:center; margin-top:20px; flex-wrap:wrap;">
+                <button class="btn btn-confirm" onclick="newBeamEntry()">➕ 新梁入场</button>
+                <button class="btn btn-info" onclick="openUpdatePositionModal()">🔧 更新位置</button>
+                <button class="btn btn-warning" onclick="resetAllData()">⚠️ 重置数据</button>
+                <button class="btn btn-info" onclick="exportData()">📥 导出</button>
+                <button class="btn btn-info" onclick="importDataPrompt()">📤 导入</button>
+            </div>
+            <div class="sync-status" id="syncStatus">数据来源：本地存储</div>
+        </div>
+        <div class="log-area">
+            <div class="log-title"><span>📋 操作记录</span><button class="btn btn-info" style="font-size:13px;padding:6px 12px;" onclick="openManualLogModal()">➕ 手动添加</button></div>
+            <ul class="log-list" id="logList"><li style="color:#888;">暂无操作记录</li></ul>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="modalOverlay"><div class="modal" id="modalContent"></div></div>
+<div class="edit-modal" id="editLogModal">
+    <h3 style="color:#ffd700;" id="editLogTitle">编辑操作记录</h3>
+    <label>梁编号</label><input type="text" id="editBeamId" placeholder="例如 A1">
+    <label>动作类型</label><input type="text" id="editActionType" placeholder="例如 移动">
+    <label>从</label><input type="text" id="editFrom" placeholder="例如 绑扎胎具1">
+    <label>到</label><input type="text" id="editTo" placeholder="例如 制梁台座1">
+    <div class="btn-row" style="margin-top:12px; display:flex; gap:10px; justify-content:flex-end;">
+        <button class="btn btn-confirm" onclick="saveLogEdit()">保存</button>
+        <button class="btn btn-cancel" onclick="closeEditLogModal()">取消</button>
+    </div>
+</div>
+<div class="modal-overlay" id="updatePositionOverlay">
+    <div class="modal" style="min-width:450px;">
+        <h3>🔧 手动更新梁位置</h3>
+        <div style="margin-bottom:15px;"><label>梁编号</label><input type="text" id="updateBeamId" placeholder="输入梁编号" style="width:100%;padding:8px;background:#1a1a3e;border:1px solid #0f3460;color:#fff;border-radius:4px;"></div>
+        <div style="margin-bottom:15px;"><label>目标台座</label><select id="updateTarget" style="width:100%;padding:8px;background:#1a1a3e;border:1px solid #0f3460;color:#fff;border-radius:4px;"></select></div>
+        <div class="warning-text" id="updateWarning"></div>
+        <div class="btn-row" style="display:flex; gap:10px; justify-content:flex-end;">
+            <button class="btn btn-confirm" onclick="executeUpdatePosition()">确认更新</button>
+            <button class="btn btn-cancel" onclick="closeUpdateModal()">取消</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // ========== 你的 GitHub 数据文件地址 ==========
+    const DATA_URL = 'https://raw.githubusercontent.com/luojian049/-by-/main/梁场备份.json';
+
+    const STORAGE_KEY = 'beamFieldData';
+    let beams = {};
+    let pedestals = {};
+    let logs = [];
+    let logCounter = 1;
+
+    // ---------- 本地存储 ----------
+    function saveToLocal() {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ beams, pedestals, logs, logCounter }));
+    }
+    function loadFromLocal() {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return false;
+        try {
+            const data = JSON.parse(raw);
+            beams = data.beams || {};
+            pedestals = data.pedestals || {};
+            logs = data.logs || [];
+            logCounter = data.logCounter || 1;
+            return true;
+        } catch (e) { return false; }
+    }
+
+    // ---------- 从 GitHub 加载云端数据 ----------
+    async function loadFromCloud() {
+        try {
+            const response = await fetch(DATA_URL, { cache: 'no-cache' });
+            if (!response.ok) throw new Error('HTTP ' + response.status);
+            const data = await response.json();
+            if (data.beams && data.pedestals && data.logs) {
+                beams = data.beams;
+                pedestals = data.pedestals;
+                logs = data.logs;
+                logCounter = data.logCounter || 1;
+                document.getElementById('syncStatus').textContent = '数据来源：云端（GitHub）';
+                saveToLocal(); // 同步到本地
+                return true;
+            }
+        } catch (e) {
+            console.log('云端数据加载失败，使用本地数据:', e.message);
+        }
+        return false;
+    }
+
+    async function loadAllData() {
+        const cloudLoaded = await loadFromCloud();
+        if (!cloudLoaded) {
+            if (!loadFromLocal()) {
+                initPedestalsStructure();
+                saveToLocal();
+            }
+            document.getElementById('syncStatus').textContent = '数据来源：本地存储';
+        }
+    }
+
+    function initPedestalsStructure() {
+        pedestals = {};
+        for (let i=1; i<=2; i++) pedestals[`绑扎胎具${i}`] = { type:'binder', beam:null, steam:false };
+        for (let i=1; i<=6; i++) pedestals[`制梁台座${i}`] = { type:'caster', beam:null, steam:false };
+        for (let r=1; r<=5; r++)
+            for (let c=1; c<=7; c++) {
+                pedestals[`${r}-${c}下`] = { type:'storage', beam:null };
+                pedestals[`${r}-${c}上`] = { type:'storage', beam:null };
+            }
+        pedestals['蒸养棚1'] = { type:'steamShed', location:'存放区' };
+        pedestals['蒸养棚2'] = { type:'steamShed', location:'存放区' };
+        pedestals['平衡吊'] = { type:'crane', location:'制梁台座3' };
+        beams = {}; logs = []; logCounter = 1;
+    }
+
+    function resetAllData() {
+        if (!confirm('确定要重置所有数据吗？此操作不可恢复！')) return;
+        localStorage.removeItem(STORAGE_KEY);
+        initPedestalsStructure();
+        saveToLocal();
+        renderAll();
+    }
+
+    // ---------- 日志 ----------
+    function addLog(beamId, from, to, actionType) {
+        const now = new Date();
+        const timeStr = now.getFullYear()+'.'+(now.getMonth()+1)+'.'+now.getDate()+' '+
+            String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
+        logs.unshift({ id: logCounter++, time: timeStr, beamId, from, to, actionType });
+        renderLogs();
+        saveToLocal();
+    }
+    function deleteLog(logId) {
+        if (!confirm('确定删除这条记录吗？')) return;
+        logs = logs.filter(l => l.id !== logId);
+        renderLogs();
+        saveToLocal();
+    }
+    let editingLogId = null, manualLogMode = false;
+    function openEditLogModal(logId) {
+        const log = logs.find(l=>l.id===logId); if (!log) return;
+        manualLogMode = false; editingLogId = logId;
+        document.getElementById('editBeamId').value = log.beamId;
+        document.getElementById('editActionType').value = log.actionType;
+        document.getElementById('editFrom').value = log.from;
+        document.getElementById('editTo').value = log.to;
+        document.getElementById('editLogTitle').textContent = '编辑操作记录';
+        document.getElementById('editLogModal').classList.add('active');
+    }
+    function openManualLogModal() {
+        manualLogMode = true; editingLogId = null;
+        document.getElementById('editBeamId').value = '';
+        document.getElementById('editActionType').value = '';
+        document.getElementById('editFrom').value = '';
+        document.getElementById('editTo').value = '';
+        document.getElementById('editLogTitle').textContent = '手动添加操作记录';
+        document.getElementById('editLogModal').classList.add('active');
+    }
+    function saveLogEdit() {
+        const beamId = document.getElementById('editBeamId').value.trim();
+        const actionType = document.getElementById('editActionType').value.trim();
+        const from = document.getElementById('editFrom').value.trim();
+        const to = document.getElementById('editTo').value.trim();
+        if (!beamId || !actionType) { alert('梁编号和动作类型不能为空'); return; }
+        if (manualLogMode) {
+            const now = new Date();
+            const timeStr = now.getFullYear()+'.'+(now.getMonth()+1)+'.'+now.getDate()+' '+
+                String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
+            logs.unshift({ id: logCounter++, time: timeStr, beamId, from, to, actionType });
+        } else {
+            const log = logs.find(l=>l.id===editingLogId);
+            if (log) { log.beamId = beamId; log.actionType = actionType; log.from = from; log.to = to; }
+        }
+        closeEditLogModal();
+        renderLogs();
+        saveToLocal();
+    }
+    function closeEditLogModal() { document.getElementById('editLogModal').classList.remove('active'); }
+    function renderLogs() {
+        const list = document.getElementById('logList');
+        if (logs.length === 0) { list.innerHTML = '<li style="color:#888;">暂无操作记录</li>'; return; }
+        list.innerHTML = logs.map(log => `
+            <li class="log-item">
+                <div class="log-time">记录${log.id} | ${log.time}</div>
+                <div class="log-action">${log.actionType}</div>
+                <div class="log-detail">${log.beamId}: ${log.from} → ${log.to}</div>
+                <div class="log-actions">
+                    <button onclick="openEditLogModal(${log.id})">✏️编辑</button>
+                    <button onclick="deleteLog(${log.id})">🗑️删除</button>
+                </div>
+            </li>`).join('');
+    }
+
+    // ---------- 渲染 ----------
+    function renderAll() {
+        let html = '';
+        for (let i=1; i<=2; i++) {
+            const id = `绑扎胎具${i}`, p = pedestals[id], cls = p.beam?'occupied':'empty', nm = p.beam||'空闲';
+            html += `<div class="pedestal-item ${cls}" onclick="openActionModal('${id}')"><div class="pedestal-name">${id}</div><div class="pedestal-beam">${nm}</div><div class="pedestal-status">${p.beam?'绑扎中':'可用'}</div></div>`;
+        }
+        document.getElementById('binderZone').innerHTML = html;
+        html = '';
+        for (let i=1; i<=6; i++) {
+            const id = `制梁台座${i}`, p = pedestals[id], cls = p.beam?'occupied':'empty', nm = p.beam||'空闲';
+            const steam = p.steam ? '<span style="color:#ff8c00;">🔥蒸养中</span>' : '<span style="color:#888;">蒸养关</span>';
+            html += `<div class="pedestal-item ${cls}" onclick="openActionModal('${id}')"><div class="pedestal-name">${id}</div><div class="pedestal-beam">${nm}</div><div class="pedestal-status">${p.beam?steam:'可用'}</div></div>`;
+        }
+        document.getElementById('castZone').innerHTML = html;
+        let shtml = '<div class="storage-columns">';
+        for (let col=1; col<=7; col++) {
+            shtml += `<div class="storage-column"><div class="storage-column-title">列 ${col}</div>`;
+            for (let row=1; row<=5; row++) {
+                const d = `${row}-${col}下`, u = `${row}-${col}上`, pD = pedestals[d], pU = pedestals[u];
+                shtml += `<div class="storage-cell-vertical">
+                    <div class="storage-mini ${pU.beam?'occupied':'empty'}" onclick="openActionModal('${u}')"><span class="slot-id">${u}</span><span class="slot-beam">${pU.beam||'空'}</span></div>
+                    <div class="storage-mini ${pD.beam?'occupied':'empty'}" onclick="openActionModal('${d}')"><span class="slot-id">${d}</span><span class="slot-beam">${pD.beam||'空'}</span></div>
+                </div>`;
+            }
+            shtml += '</div>';
+        }
+        document.getElementById('storageZone').innerHTML = shtml + '</div>';
+        const crane = pedestals['平衡吊'], s1 = pedestals['蒸养棚1'], s2 = pedestals['蒸养棚2'];
+        document.getElementById('specialEquip').innerHTML = `
+            <div class="equipment-card" data-eq="平衡吊" onclick="openEquipModal('平衡吊')"><div class="eq-name">🔧 平衡吊</div><div class="eq-location">📍 ${crane.location}</div></div>
+            <div class="equipment-card" data-eq="蒸养棚1" onclick="openEquipModal('蒸养棚1')"><div class="eq-name">🏕️ 蒸养棚1</div><div class="eq-location">📍 ${s1.location}</div></div>
+            <div class="equipment-card" data-eq="蒸养棚2" onclick="openEquipModal('蒸养棚2')"><div class="eq-name">🏕️ 蒸养棚2</div><div class="eq-location">📍 ${s2.location}</div></div>`;
+        document.querySelectorAll('.equipment-card').forEach(c => c.classList.remove('conflict'));
+        if (crane.location !== '存放区') {
+            if (crane.location === s1.location || crane.location === s2.location) {
+                document.querySelector('.equipment-card[data-eq="平衡吊"]')?.classList.add('conflict');
+                if (crane.location === s1.location) document.querySelector('.equipment-card[data-eq="蒸养棚1"]')?.classList.add('conflict');
+                if (crane.location === s2.location) document.querySelector('.equipment-card[data-eq="蒸养棚2"]')?.classList.add('conflict');
+            }
+        }
+        saveToLocal();
+    }
+
+    // ---------- 弹窗逻辑 ----------
+    function openActionModal(pedestalId) {
+        const p = pedestals[pedestalId];
+        const overlay = document.getElementById('modalOverlay');
+        const modal = document.getElementById('modalContent');
+        let beamInfo = p.beam ? `当前占用：<strong>${p.beam}</strong>` : '当前状态：<strong>空闲</strong>';
+        let targetsHtml = '';
+        if (p.beam) {
+            const targets = [];
+            if (p.type === 'binder') for (let i=1; i<=6; i++) targets.push(`制梁台座${i}`);
+            else if (p.type === 'caster') for (let r=1; r<=5; r++) for (let c=1; c<=7; c++) {
+                targets.push(`${r}-${c}下`); targets.push(`${r}-${c}上`);
+            }
+            else if (p.type === 'storage') for (let r=1; r<=5; r++) for (let c=1; c<=7; c++) {
+                const d=`${r}-${c}下`, u=`${r}-${c}上`;
+                if (d!==pedestalId) targets.push(d);
+                if (u!==pedestalId) targets.push(u);
+            }
+            targetsHtml = '<div style="margin-bottom:10px;">移至：</div><div style="display:flex; flex-wrap:wrap; gap:6px;">';
+            for (const t of targets) {
+                const tp = pedestals[t];
+                targetsHtml += `<button class="btn" style="font-size:12px; background:${tp.beam?'#552222':'#223322'};" onclick="moveBeam('${pedestalId}','${t}')">${t} ${tp.beam?'(占)' :''}</button>`;
+            }
+            targetsHtml += '</div><button class="btn btn-out" style="margin-top:10px;" onclick="beamOut(\''+pedestalId+'\')">🚚 该梁出场</button>';
+        }
+        modal.innerHTML = `
+            <h3>${pedestalId}</h3><div style="margin-bottom:10px;">${beamInfo}</div>
+            ${p.beam ? targetsHtml : '<p style="color:#888;">空闲台座</p>'}
+            ${p.type==='caster' ? `<div style="margin-top:10px;"><button class="btn ${p.steam?'btn-danger':'btn-confirm'}" onclick="toggleSteam('${pedestalId}')">${p.steam?'关闭蒸养':'开启蒸养'}</button></div>` : ''}
+            <button class="btn btn-cancel" style="margin-top:10px; width:100%;" onclick="closeModal()">关闭</button>`;
+        overlay.classList.add('active');
+    }
+    function moveBeam(fromId, toId) {
+        const fromP = pedestals[fromId], toP = pedestals[toId], beam = fromP.beam;
+        if (!beam) return;
+        if (toP.beam) { alert('目标台座已被占用'); return; }
+        fromP.beam = null; toP.beam = beam;
+        if (!beams[beam]) beams[beam] = {};
+        beams[beam].currentLocation = toId;
+        let action = '移动';
+        if (fromP.type==='binder' && toP.type==='caster') action = '吊至制梁';
+        else if (fromP.type==='caster' && toP.type==='storage') action = '提至存梁';
+        addLog(beam, fromId, toId, action);
+        closeModal();
+        renderAll();
+    }
+    function beamOut(sourceId) {
+        const p = pedestals[sourceId], beam = p.beam;
+        if (!beam) return;
+        if (!confirm(`确定将梁 ${beam} 出场吗？`)) return;
+        p.beam = null;
+        if (beams[beam]) beams[beam].currentLocation = '已出场';
+        addLog(beam, sourceId, '出场', '梁出场');
+        closeModal();
+        renderAll();
+    }
+    function toggleSteam(pedestalId) {
+        const p = pedestals[pedestalId];
+        p.steam = !p.steam;
+        addLog('系统', '', pedestalId, p.steam?'开启蒸养':'关闭蒸养');
+        closeModal();
+        renderAll();
+        openActionModal(pedestalId);
+    }
+    function openEquipModal(equipId) {
+        const equip = pedestals[equipId];
+        const overlay = document.getElementById('modalOverlay');
+        const modal = document.getElementById('modalContent');
+        const locs = ['存放区']; for (let i=1; i<=6; i++) locs.push(`制梁台座${i}`);
+        let html = `<h3>移动 ${equipId}</h3><p>当前位置：${equip.location}</p><div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:10px;">`;
+        for (const loc of locs) {
+            html += `<button class="btn" style="font-size:12px;" onclick="moveEquip('${equipId}','${loc}')">${loc}</button>`;
+        }
+        html += '</div><div id="conflictWarning" class="warning-text"></div><button class="btn btn-cancel" style="margin-top:10px; width:100%;" onclick="closeModal()">取消</button>';
+        modal.innerHTML = html;
+        overlay.classList.add('active');
+    }
+    function moveEquip(equipId, newLoc) {
+        const equip = pedestals[equipId];
+        if (equip.type==='steamShed' && newLoc!=='存放区' && pedestals['平衡吊'].location===newLoc) {
+            document.getElementById('conflictWarning').textContent = '⚠️ 该位置有平衡吊！'; return;
+        }
+        if (equip.type==='crane' && newLoc!=='存放区' && (pedestals['蒸养棚1'].location===newLoc || pedestals['蒸养棚2'].location===newLoc)) {
+            document.getElementById('conflictWarning').textContent = '⚠️ 该位置有蒸养棚！'; return;
+        }
+        equip.location = newLoc;
+        addLog('系统', equipId, newLoc, '设备移动');
+        closeModal();
+        renderAll();
+    }
+    function closeModal() { document.getElementById('modalOverlay').classList.remove('active'); }
+    document.getElementById('modalOverlay').addEventListener('click', function(e) { if (e.target===this) closeModal(); });
+    document.addEventListener('keydown', function(e) { if (e.key==='Escape') closeModal(); });
+
+    function populateUpdateTargets() {
+        const sel = document.getElementById('updateTarget');
+        sel.innerHTML = '<option value="">-- 选择台座 --</option>';
+        const g1 = document.createElement('optgroup'); g1.label = '制梁台座';
+        for (let i=1; i<=6; i++) { const o = document.createElement('option'); o.value = `制梁台座${i}`; o.textContent = `制梁台座${i}`; g1.appendChild(o); }
+        sel.appendChild(g1);
+        const g2 = document.createElement('optgroup'); g2.label = '存梁台座';
+        for (let r=1; r<=5; r++) for (let c=1; c<=7; c++) {
+            const o1 = document.createElement('option'); o1.value = `${r}-${c}下`; o1.textContent = `${r}-${c}下`; g2.appendChild(o1);
+            const o2 = document.createElement('option'); o2.value = `${r}-${c}上`; o2.textContent = `${r}-${c}上`; g2.appendChild(o2);
+        }
+        sel.appendChild(g2);
+    }
+    function openUpdatePositionModal() {
+        populateUpdateTargets();
+        document.getElementById('updateBeamId').value = '';
+        document.getElementById('updateWarning').textContent = '';
+        document.getElementById('updatePositionOverlay').classList.add('active');
+    }
+    function closeUpdateModal() { document.getElementById('updatePositionOverlay').classList.remove('active'); }
+    function executeUpdatePosition() {
+        const beamId = document.getElementById('updateBeamId').value.trim();
+        const targetId = document.getElementById('updateTarget').value;
+        if (!beamId) { alert('请输入梁编号'); return; }
+        if (!targetId) { alert('请选择目标台座'); return; }
+        if (!pedestals[targetId] || (pedestals[targetId].type!=='caster' && pedestals[targetId].type!=='storage')) {
+            alert('目标台座无效'); return;
+        }
+        if (pedestals[targetId].beam && pedestals[targetId].beam !== beamId) {
+            if (!confirm(`目标台座已被 ${pedestals[targetId].beam} 占用，继续将替换？`)) return;
+            const old = pedestals[targetId].beam;
+            if (beams[old]) beams[old].currentLocation = '已移走';
+            pedestals[targetId].beam = null;
+        }
+        if (beams[beamId] && beams[beamId].currentLocation && beams[beamId].currentLocation !== '已出场' && beams[beamId].currentLocation !== '已移走') {
+            const oldLoc = beams[beamId].currentLocation;
+            if (pedestals[oldLoc]) pedestals[oldLoc].beam = null;
+        }
+        pedestals[targetId].beam = beamId;
+        if (!beams[beamId]) beams[beamId] = {};
+        beams[beamId].currentLocation = targetId;
+        addLog(beamId, '手动更新', targetId, '手动更新位置');
+        closeUpdateModal();
+        renderAll();
+    }
+    document.getElementById('updatePositionOverlay').addEventListener('click', function(e) { if (e.target===this) closeUpdateModal(); });
+
+    function newBeamEntry() {
+        const beamId = prompt('请输入新梁编号（如 A1）：'); if (!beamId) return;
+        if (beams[beamId]) { alert('该编号已存在！'); return; }
+        const free = [];
+        for (let i=1; i<=2; i++) if (!pedestals[`绑扎胎具${i}`].beam) free.push(`绑扎胎具${i}`);
+        if (free.length===0) { alert('所有绑扎胎具均在使用！'); return; }
+        pedestals[free[0]].beam = beamId;
+        beams[beamId] = { currentLocation: free[0] };
+        addLog(beamId, '新梁入场', free[0], '开始绑扎');
+        renderAll();
+    }
+
+    function exportData() {
+        const data = { beams, pedestals, logs, logCounter };
+        const blob = new Blob([JSON.stringify(data)], {type:'application/json'});
+        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = '梁场备份.json'; a.click();
+    }
+    function importDataPrompt() {
+        const input = document.createElement('input'); input.type='file'; input.accept='.json';
+        input.onchange = e => {
+            const file = e.target.files[0]; if(!file) return;
+            const reader = new FileReader();
+            reader.onload = ev => {
+                try {
+                    const data = JSON.parse(ev.target.result);
+                    if (data.beams && data.pedestals && data.logs) {
+                        beams = data.beams; pedestals = data.pedestals; logs = data.logs; logCounter = data.logCounter || 1;
+                        renderAll(); saveToLocal(); alert('数据已导入！');
+                    } else alert('无效的备份文件');
+                } catch (ex) { alert('文件解析失败'); }
+            };
+            reader.readAsText(file);
+        };
+        input.click();
+    }
+
+    // ---------- 启动 ----------
+    (async function init() {
+        await loadAllData();
+        renderAll();
+    })();
+</script>
+</body>
+</html>
